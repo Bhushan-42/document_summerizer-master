@@ -114,12 +114,6 @@ def create_visualization_from_excel(file_path):
         # Load the Excel file and skip the first row (header row is automatically handled by pandas)
         df = pd.read_excel(file_path)
 
-        # Debugging: Print the DataFrame and its data types
-        print("DataFrame Preview (Before Dropping First Row):")
-        print(df.head())
-        print("DataFrame Data Types:")
-        print(df.dtypes)
-
         # Drop the first row of data (not the header)
         df = df.iloc[1:].reset_index(drop=True)
 
@@ -228,6 +222,62 @@ def visualization_page_and_handler():
         print(f"File type not allowed or invalid file: {file.filename}")
         return jsonify({"error": f"File type not allowed. Please upload XLSX or XLS."}), 400
 
+@app.route('/visualization', methods=['POST'])
+def visualization():
+    try:
+        # Check if a file is included in the request
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part in the request"}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+
+        # Save the uploaded file
+        if file and allowed_file(file.filename):
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(file.filename))
+            file.save(file_path)
+
+            # Load the Excel file
+            df = pd.read_excel(file_path)
+
+            # Drop the first row of data (not the header)
+            df = df.iloc[1:].reset_index(drop=True)
+
+            # Drop rows with missing values in the first or second column
+            df = df.dropna(subset=[df.columns[0], df.columns[1]])
+
+            # Ensure the second column is numeric
+            df.iloc[:, 1] = pd.to_numeric(df.iloc[:, 1], errors='coerce')
+
+            # Drop rows where the second column could not be converted to numeric
+            df = df.dropna(subset=[df.columns[1]])
+
+            # Assume first column is X, second column is Y
+            x_col = df.columns[0]
+            y_col = df.columns[1]
+
+            # Create a pie chart using Plotly Express
+            pie_chart = px.pie(df, names=x_col, values=y_col, title=f"Pie Chart of {x_col} vs {y_col}")
+
+            # Create a bar graph using Plotly Express
+            bar_graph = px.bar(df, x=x_col, y=y_col, title=f"Bar Graph of {x_col} vs {y_col}")
+
+            # Convert both figures to JSON strings compatible with Plotly.js
+            pie_chart_json = pio.to_json(pie_chart)
+            bar_graph_json = pio.to_json(bar_graph)
+
+            # Parse strings back to dicts
+            pie_chart_dict = json.loads(pie_chart_json)
+            bar_graph_dict = json.loads(bar_graph_json)
+
+            # Return both charts as a dictionary
+            return jsonify({"pie_chart": pie_chart_dict, "bar_graph": bar_graph_dict}), 200
+
+        else:
+            return jsonify({"error": "Invalid file type. Only Excel files are allowed."}), 400
+
+    except Exception as e:
+        return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
 
 # --- API Endpoint for Summarization ---
 @app.route('/summarize', methods=['POST'])
