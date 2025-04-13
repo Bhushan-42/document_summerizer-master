@@ -1,0 +1,6 @@
+Flask
+ollama
+PyPDF2         # For PDF text extraction (alternative: pymupdf)
+python-docx    # For DOCX text extraction
+pytesseract    # For OCR (image text extraction)
+Pillow 
